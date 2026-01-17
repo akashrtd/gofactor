@@ -75,6 +75,10 @@ from trident.parser.ast import (
     IndexExpr,
     AttributeExpr,
     TensorExpr,
+    IndexExpr,
+    AttributeExpr,
+    TensorExpr,
+    DictExpr,
     NaturalLanguageExpr,
     LambdaExpr,
     IfExpr,
@@ -329,6 +333,7 @@ class Parser:
         
         self._expect(TokenType.COLON, "Expected ':' after pipeline name")
         self._expect(TokenType.NEWLINE, "Expected newline after ':'")
+        self._skip_newlines()
         self._expect(TokenType.INDENT, "Expected indented block")
         
         body = self._parse_block()
@@ -360,6 +365,7 @@ class Parser:
         
         self._expect(TokenType.COLON, "Expected ':' after function signature")
         self._expect(TokenType.NEWLINE, "Expected newline after ':'")
+        self._skip_newlines()
         self._expect(TokenType.INDENT, "Expected indented block")
         
         body = self._parse_block()
@@ -383,6 +389,7 @@ class Parser:
         
         self._expect(TokenType.COLON, "Expected ':' after struct name")
         self._expect(TokenType.NEWLINE, "Expected newline after ':'")
+        self._skip_newlines()
         self._expect(TokenType.INDENT, "Expected indented block")
         
         fields: list[Field] = []
@@ -837,13 +844,35 @@ class Parser:
         # Tensor/list literal
         elif self._match(TokenType.LBRACKET):
             elements: list[Expression] = []
+            self._skip_newlines()
             if not self._check(TokenType.RBRACKET):
                 while True:
+                    self._skip_newlines()
                     elements.append(self._parse_expression())
                     if not self._match(TokenType.COMMA):
                         break
+                    self._skip_newlines()
+            self._skip_newlines()
             self._expect(TokenType.RBRACKET, "Expected ']' after elements")
             return TensorExpr(location=location, elements=tuple(elements))
+        
+        # Dict literal
+        elif self._match(TokenType.LBRACE):
+            items: list[tuple[Expression, Expression]] = []
+            self._skip_newlines()
+            if not self._check(TokenType.RBRACE):
+                while True:
+                    self._skip_newlines()
+                    key = self._parse_expression()
+                    self._expect(TokenType.COLON, "Expected ':' in dict item")
+                    value = self._parse_expression()
+                    items.append((key, value))
+                    if not self._match(TokenType.COMMA):
+                        break
+                    self._skip_newlines()
+            self._skip_newlines()
+            self._expect(TokenType.RBRACE, "Expected '}' after dict items")
+            return DictExpr(location=location, items=tuple(items))
         
         raise self._error(f"Unexpected token in expression: {self._current.type.name}")
 

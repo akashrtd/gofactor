@@ -3,7 +3,7 @@ pipeline InvoiceProcessor:
     @model(ocr: "qwen2.5-vl", nlp: "gemma-3-quantized")
     fn process(file_path: string) -> json:
         # Load the image/pdf
-        let image = vision.read_file(file_path)
+        let image = vision.read_image(file_path)
 
         # 1. Optical Character Recognition (Built-in)
         # We explicitly request layout info for better table extraction
@@ -18,7 +18,18 @@ pipeline InvoiceProcessor:
             "date": string
         })
 
-        print(f"Vendor: {data.vendor}")
-        print(f"Total: ${data.total}")
+        print("Vendor: " + data.vendor)
+        print("Total: $" + str(data.total))
         
         return data
+        return data
+
+# Main execution
+print("Initializing pipeline...")
+# Instantiate the pipeline
+let processor = InvoiceProcessor()
+
+# Run user flow
+print("Processing invoice...")
+let result = processor.process("invoice.pdf")
+print("Done!")

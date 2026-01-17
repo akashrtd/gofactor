@@ -22,6 +22,7 @@ class SymbolKind(Enum):
     MODEL = auto()
     TYPE = auto()
     MODULE = auto()
+    STRUCT = auto()
 
 
 @dataclass
@@ -132,7 +133,7 @@ class SymbolTable:
         """Initialize built-in symbols."""
         from trident.semantic.types import (
             INT, FLOAT, STRING, BOOL, IMAGE, DOCUMENT, ANY, NONE,
-            FunctionType, TensorType,
+            FunctionType, TensorType, DictType,
         )
         
         # Built-in types
@@ -146,6 +147,15 @@ class SymbolTable:
             ("Any", ANY),
             ("None", NONE),
             ("Tensor", TensorType()),
+            # Lowercase aliases
+            ("int", INT),
+            ("float", FLOAT),
+            ("string", STRING),
+            ("bool", BOOL),
+            ("image", IMAGE),
+            ("document", DOCUMENT),
+            ("tensor", TensorType()),
+            ("json", DictType(STRING, ANY)), # Add json alias
         ]
         
         for name, typ in type_symbols:
@@ -183,6 +193,17 @@ class SymbolTable:
                 name=name,
                 kind=SymbolKind.FUNCTION,
                 type=typ,
+                is_mutable=False,
+                is_builtin=True,
+            ))
+            
+        # Built-in modules
+        builtin_modules = ["vision", "ocr", "nlp"]
+        for name in builtin_modules:
+            self.define(Symbol(
+                name=name,
+                kind=SymbolKind.MODULE,
+                type=ANY,
                 is_mutable=False,
                 is_builtin=True,
             ))

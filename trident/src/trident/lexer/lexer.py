@@ -52,6 +52,7 @@ class Lexer:
     _indent_stack: list[int] = field(default_factory=lambda: [0], init=False, repr=False)
     _at_line_start: bool = field(default=True, init=False, repr=False)
     _pending_tokens: list[Token] = field(default_factory=list, init=False, repr=False)
+    _nesting_level: int = field(default=0, init=False, repr=False)
     
     @property
     def _current(self) -> str:
@@ -354,6 +355,13 @@ class Lexer:
         
         if char in single_char_ops:
             self._advance()
+            
+            # Update nesting level for implicit line joining
+            if char in "([{":
+                self._nesting_level += 1
+            elif char in ")]}":
+                self._nesting_level = max(0, self._nesting_level - 1)
+                
             return Token(single_char_ops[char], char, location, char)
         
         raise LexerError(f"Unexpected character: {char!r}", location)
@@ -376,9 +384,15 @@ class Lexer:
             # Handle start of line (indentation)
             if self._at_line_start:
                 self._at_line_start = False
-                indent_tokens = self._handle_indentation()
-                for token in indent_tokens:
-                    yield token
+                # Only check indentation if not inside brackets (implicit line joining)
+                if self._nesting_level == 0:
+                    indent_tokens = self._handle_indentation()
+                    for token in indent_tokens:
+                        yield token
+                else:
+                    # Inside brackets, just consume leading whitespace
+                    while self._current in (" ", "\t"):
+                        self._advance()
             
             # Skip inline whitespace
             self._skip_whitespace_inline()

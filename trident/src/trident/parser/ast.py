@@ -247,6 +247,15 @@ class TensorExpr(Expression):
 
 
 @dataclass(frozen=True)
+class DictExpr(Expression):
+    """Dictionary literal: {key: value}."""
+    items: tuple[tuple[Expression, Expression], ...]
+    
+    def accept(self, visitor: ASTVisitor) -> Any:
+        return visitor.visit(self)
+
+
+@dataclass(frozen=True)
 class NaturalLanguageExpr(Expression):
     """
     Natural language block for LLM queries.

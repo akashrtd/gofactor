@@ -31,7 +31,9 @@ from trident.parser.ast import (
     ImportStatement,
     FunctionDef,
     PipelineDef,
+    StructDef,
     Parameter,
+    Field,
     # Expressions
     Literal,
     Identifier,
@@ -43,6 +45,7 @@ from trident.parser.ast import (
     IndexExpr,
     AttributeExpr,
     TensorExpr,
+    DictExpr,
     NaturalLanguageExpr,
     LambdaExpr,
     IfExpr,
@@ -62,6 +65,7 @@ from trident.semantic.types import (
     PipelineType,
     ModelType,
     ListType,
+    DictType,
     AnyType,
     INT, FLOAT, STRING, BOOL, IMAGE, DOCUMENT, ANY, NONE, UNKNOWN,
     type_from_string,
@@ -130,8 +134,20 @@ class SemanticAnalyzer(ASTVisitor):
     
     def _resolve_type_annotation(self, ann: TypeAnnotation) -> Type:
         """Convert an AST type annotation to a Type."""
+    def _resolve_type_annotation(self, ann: TypeAnnotation) -> Type:
+        """Convert an AST type annotation to a Type."""
         if isinstance(ann, SimpleType):
-            return type_from_string(ann.name)
+            # Try primitive/builtin types first
+            typ = type_from_string(ann.name)
+            if typ != UNKNOWN:
+                return typ
+            
+            # Lookup user-defined types (Structs)
+            symbol = self.symbols.lookup(ann.name)
+            if symbol and symbol.kind == SymbolKind.STRUCT:
+                return symbol.type
+                
+            return UNKNOWN
         elif isinstance(ann, ASTTensorType):
             dtype = type_from_string(ann.dtype) if ann.dtype else FLOAT
             return TensorType(dtype=dtype, shape=ann.shape)
@@ -191,6 +207,41 @@ class SemanticAnalyzer(ASTVisitor):
         # Exit scope
         self.symbols.exit_scope()
         self._current_pipeline = old_pipeline
+    
+    def visit_StructDef(self, node: StructDef) -> None:
+        """Visit struct definition."""
+        location = node.location
+        
+        # Check for redefinition
+        if self.symbols.lookup_local(node.name):
+            self._error(f"Redefinition of '{node.name}'", location)
+            return
+            
+        # Define struct symbol (using AnyType for now as placeholder for StructType)
+        symbol = Symbol(
+            name=node.name,
+            kind=SymbolKind.STRUCT,
+            type=ANY, 
+            location=location,
+        )
+        self.symbols.define(symbol)
+        
+        # Analyze fields
+        for field in node.fields:
+            self.visit(field)
+            
+    def visit_Field(self, node: Field) -> None:
+        """Visit struct field."""
+        if node.default_value:
+            self.visit(node.default_value)
+            value_type = self.get_type(node.default_value)
+            declared_type = self._resolve_type_annotation(node.type_annotation)
+            
+            if not declared_type.is_assignable_from(value_type):
+                self._error(
+                    f"Cannot assign {value_type} to field {node.name}:{declared_type}",
+                    node.location
+                )
     
     def visit_FunctionDef(self, node: FunctionDef) -> None:
         """Visit function definition."""
@@ -633,6 +684,34 @@ class SemanticAnalyzer(ASTVisitor):
             self._set_type(node, TensorType(dtype=dtype, shape=(len(element_types),)))
         else:
             self._set_type(node, TensorType())
+            
+    def visit_DictExpr(self, node: DictExpr) -> None:
+        """Visit dictionary literal."""
+        key_types: list[Type] = []
+        value_types: list[Type] = []
+        
+        for key, value in node.items:
+            self.visit(key)
+            self.visit(value)
+            key_types.append(self.get_type(key))
+            value_types.append(self.get_type(value))
+            
+        # Determine common key and value types
+        if key_types:
+            key_dtype = key_types[0]
+            for t in key_types[1:]:
+                key_dtype = common_type(key_dtype, t)
+        else:
+            key_dtype = STRING # Default to String keys
+            
+        if value_types:
+            val_dtype = value_types[0]
+            for t in value_types[1:]:
+                val_dtype = common_type(val_dtype, t)
+        else:
+            val_dtype = ANY
+            
+        self._set_type(node, DictType(key_type=key_dtype, value_type=val_dtype))
     
     def visit_NaturalLanguageExpr(self, node: NaturalLanguageExpr) -> None:
         """Visit natural language expression."""

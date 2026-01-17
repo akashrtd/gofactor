@@ -168,15 +168,6 @@ KEYWORDS: dict[str, TokenType] = {
     "Image": TokenType.IMAGE,
     "Image": TokenType.IMAGE,
     "Document": TokenType.DOCUMENT,
-
-    # Lowercase aliases for better DX
-    "tensor": TokenType.TENSOR,
-    "string": TokenType.STRING_TYPE,
-    "int": TokenType.INT_TYPE,
-    "float": TokenType.FLOAT_TYPE,
-    "bool": TokenType.BOOL_TYPE,
-    "image": TokenType.IMAGE,
-    "document": TokenType.DOCUMENT,
 }
 
 # Annotation keywords (after @)

@@ -32,7 +32,10 @@ from trident.parser.ast import (
     ImportStatement,
     FunctionDef,
     PipelineDef,
+    StructDef,
+    Field,
     # Expressions
+    Expression,
     Literal,
     Identifier,
     BinaryOp,
@@ -43,6 +46,7 @@ from trident.parser.ast import (
     IndexExpr,
     AttributeExpr,
     TensorExpr,
+    DictExpr,
     NaturalLanguageExpr,
     LambdaExpr,
     IfExpr,
@@ -145,6 +149,7 @@ class JAXEmitter(ASTVisitor):
         self._writeln("import jax.numpy as jnp")
         self._writeln("from jax import jit, vmap, pmap, grad")
         self._writeln("from functools import partial")
+        self._writeln("from dataclasses import dataclass")
         self._writeln()
         self._writeln("# Trident runtime")
         self._writeln("from trident.runtime import TridentRuntime")
@@ -224,7 +229,27 @@ class JAXEmitter(ASTVisitor):
         self._in_pipeline = False
         
         self._indent_level -= 1
-    
+        
+    def visit_StructDef(self, node: StructDef) -> None:
+        """Visit struct definition - emit as a dataclass."""
+        self._writeln("@dataclass")
+        self._writeln(f"class {node.name}:")
+        self._indent_level += 1
+        
+        for field in node.fields:
+            type_str = self._emit_type(field.type_annotation)
+            if field.default_value:
+                default = self._emit_expr(field.default_value)
+                self._writeln(f"{field.name}: {type_str} = {default}")
+            else:
+                self._writeln(f"{field.name}: {type_str}")
+        
+        if not node.fields:
+            self._writeln("pass")
+            
+        self._indent_level -= 1
+        self._writeln()
+
     def visit_FunctionDef(self, node: FunctionDef) -> None:
         """Visit function definition."""
         # Check for JIT annotation
@@ -410,6 +435,8 @@ class JAXEmitter(ASTVisitor):
             return self._emit_attribute(node)
         elif isinstance(node, TensorExpr):
             return self._emit_tensor(node)
+        elif isinstance(node, DictExpr):
+            return self._emit_dict(node)
         elif isinstance(node, NaturalLanguageExpr):
             return self._emit_natural_language(node)
         elif isinstance(node, LambdaExpr):
@@ -472,6 +499,7 @@ class JAXEmitter(ASTVisitor):
             "llm.query": "nlp.llm_query",
             "nlp.embed": "nlp.embed_text",
             "nlp.tokenize": "nlp.tokenize",
+            "nlp.extract": "nlp.extract_structured",
             
             # Tensor primitives
             "softmax": "jax.nn.softmax",
@@ -501,6 +529,15 @@ class JAXEmitter(ASTVisitor):
         attr = attr_mappings.get(node.attribute, f".{node.attribute}")
         return f"{obj}{attr}"
     
+    def _emit_dict(self, node: DictExpr) -> str:
+        """Emit a dictionary literal."""
+        items = []
+        for key, value in node.items:
+            k = self._emit_expr(key)
+            v = self._emit_expr(value)
+            items.append(f"{k}: {v}")
+        return f"{{{', '.join(items)}}}"
+
     def _emit_tensor(self, node: TensorExpr) -> str:
         """Emit a tensor literal."""
         elements = [self._emit_expr(e) for e in node.elements]
@@ -537,6 +574,15 @@ class JAXEmitter(ASTVisitor):
                 "Tensor": "jnp.ndarray",
                 "Image": "vision.Image",
                 "Document": "vision.Document",
+                # Lowercase aliases
+                "string": "str",
+                "int": "int",
+                "float": "float",
+                "bool": "bool",
+                "tensor": "jnp.ndarray",
+                "image": "vision.Image",
+                "document": "vision.Document",
+                "json": "dict", # Helper for quick_start
             }
             return type_map.get(ann.name, ann.name)
         return "Any"
