@@ -1,0 +1,40 @@
+# Trident Gallery: Medical Record Parsing
+# Sector: Healthcare
+# Features: Handwriting OCR, PII detection, medical entity extraction
+
+struct Vitals:
+    blood_pressure: string
+    heart_rate: int
+    temperature: float
+    weight: float
+
+struct Diagnosis:
+    condition: string
+    icd10_code: string
+    notes: string
+
+struct PatientRecord:
+    patient_id: string
+    visit_date: date
+    vitals: Vitals
+    diagnoses: List[Diagnosis]
+    medications: List[string]
+    doctor_notes: string
+
+pipeline ElectronicHealthRecordParser:
+    # Specialized medical models
+    @model(ocr: "trident-ocr-medical-v2", nlp: "med-gemma-2")
+    fn parse_visit_note(scanned_note: Image) -> PatientRecord:
+        # 1. Enhance and OCR (Handwriting focus)
+        let enhanced = vision.contrast_boost(scanned_note)
+        let raw_text = ocr.extract(enhanced, handwriting=true)
+
+        # 2. De-identify PII (Privacy First)
+        # This runs locally on TPU, ensuring data never leaves the enclave
+        let safe_text = nlp.redact_pii(raw_text, entities=["NAME", "SSN", "PHONE"])
+
+        # 3. Clinical Entity Extraction
+        @intent("Extract clinical vitals, diagnoses with ICD-10 codes, and medications")
+        let record = nlp.extract(safe_text, schema=PatientRecord)
+
+        return record

@@ -1,0 +1,52 @@
+# OCR Invoice Processing Example
+# Demonstrates Trident's AI-first design for document understanding
+
+@intent("Extract structured data from invoice images")
+@model(ocr: "qwen2.5-vl", nlp: "gemma-3")
+@hardware(target: TPU, precision: bfloat16)
+
+pipeline InvoiceProcessor:
+    
+    fn process(image_path: String) -> Invoice:
+        """Process an invoice image and extract structured data."""
+        
+        # Step 1: Load and OCR the image
+        let image = vision.read(image_path)
+        let document = ocr.extract(image, layout: true)
+        
+        # Step 2: Use LLM to extract structured fields
+        @natural_language
+        let fields = llm.query(document, """
+            Extract the following information from this invoice:
+            - vendor_name: The company name of the vendor
+            - invoice_number: The invoice ID/number
+            - date: The invoice date (YYYY-MM-DD format)
+            - line_items: List of items with description, quantity, and unit_price
+            - subtotal: The subtotal amount
+            - tax: Tax amount
+            - total_amount: The final total
+            
+            Return as JSON.
+        """)
+        
+        # Step 3: Validate and return
+        return Invoice.from_dict(fields)
+    
+    fn batch_process(image_paths: List[String]) -> List[Invoice]:
+        """Process multiple invoices in parallel."""
+        let results = []
+        
+        for path in image_paths:
+            let invoice = process(path)
+            results.append(invoice)
+        
+        return results
+
+
+# Main entry point
+fn main():
+    let processor = InvoiceProcessor()
+    
+    # Example usage
+    let invoice = processor.process("sample_invoice.jpg")
+    print(invoice)

@@ -1,0 +1,13 @@
+# Trident Hello World
+# A simple example showing basic Trident syntax
+
+fn main():
+    print("Hello, Trident! 🔱")
+    
+    # Variables
+    let name = "World"
+    let count = 42
+    
+    print("Welcome to the future of AI programming")
+    print(name)
+    print(count)

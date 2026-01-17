@@ -1,0 +1,115 @@
+# Attention Mechanism Example
+# Demonstrates tensor operations for neural network building blocks
+
+@hardware(target: TPU, precision: bfloat16)
+
+fn scaled_dot_product_attention(
+    Q: Tensor[Float, *, *, 64],
+    K: Tensor[Float, *, *, 64],
+    V: Tensor[Float, *, *, 64],
+    mask: Tensor[Bool] = None
+) -> Tensor[Float]:
+    """
+    Scaled dot-product attention mechanism.
+    
+    Args:
+        Q: Query tensor [batch, seq_len, d_k]
+        K: Key tensor [batch, seq_len, d_k]
+        V: Value tensor [batch, seq_len, d_v]
+        mask: Optional attention mask
+    
+    Returns:
+        Attention output [batch, seq_len, d_v]
+    """
+    let d_k = K.shape[-1]
+    
+    # Compute attention scores
+    let scores = (Q @ K.T) / sqrt(d_k)
+    
+    # Apply mask if provided
+    if mask:
+        scores = where(mask, scores, -1e9)
+    
+    # Softmax and apply to values
+    let weights = softmax(scores, axis: -1)
+    return weights @ V
+
+
+fn multi_head_attention(
+    Q: Tensor,
+    K: Tensor, 
+    V: Tensor,
+    num_heads: Int = 8
+) -> Tensor:
+    """
+    Multi-head attention.
+    
+    Splits input into multiple heads, applies attention, and concatenates.
+    """
+    let batch_size = Q.shape[0]
+    let seq_len = Q.shape[1]
+    let d_model = Q.shape[2]
+    let d_k = d_model / num_heads
+    
+    # Split into heads
+    let Q_heads = reshape(Q, [batch_size, seq_len, num_heads, d_k])
+    let K_heads = reshape(K, [batch_size, seq_len, num_heads, d_k])
+    let V_heads = reshape(V, [batch_size, seq_len, num_heads, d_k])
+    
+    # Transpose for attention: [batch, heads, seq_len, d_k]
+    let Q_t = transpose(Q_heads, [0, 2, 1, 3])
+    let K_t = transpose(K_heads, [0, 2, 1, 3])
+    let V_t = transpose(V_heads, [0, 2, 1, 3])
+    
+    # Apply attention per head
+    let attn_output = scaled_dot_product_attention(Q_t, K_t, V_t)
+    
+    # Transpose and concatenate heads
+    let attn_t = transpose(attn_output, [0, 2, 1, 3])
+    return reshape(attn_t, [batch_size, seq_len, d_model])
+
+
+fn layer_norm(x: Tensor, eps: Float = 1e-5) -> Tensor:
+    """Layer normalization."""
+    let mean = mean(x, axis: -1, keepdims: true)
+    let var = var(x, axis: -1, keepdims: true)
+    return (x - mean) / sqrt(var + eps)
+
+
+fn feed_forward(x: Tensor, d_ff: Int = 2048) -> Tensor:
+    """Position-wise feed-forward network."""
+    let d_model = x.shape[-1]
+    
+    # Two linear layers with GELU activation
+    # In practice, these would use learned weights
+    let hidden = gelu(x)  # Simplified
+    return hidden
+
+
+fn transformer_block(x: Tensor, num_heads: Int = 8) -> Tensor:
+    """A single transformer encoder block."""
+    
+    # Self-attention with residual connection
+    let attn_out = multi_head_attention(x, x, x, num_heads)
+    let x1 = layer_norm(x + attn_out)
+    
+    # Feed-forward with residual connection
+    let ff_out = feed_forward(x1)
+    let x2 = layer_norm(x1 + ff_out)
+    
+    return x2
+
+
+fn main():
+    # Create sample input
+    let batch_size = 2
+    let seq_len = 16
+    let d_model = 512
+    
+    let x = randn(batch_size, seq_len, d_model)
+    
+    print("Input shape:", x.shape)
+    
+    let output = transformer_block(x)
+    
+    print("Output shape:", output.shape)

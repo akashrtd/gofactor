@@ -1,0 +1,70 @@
+# Sentiment Analysis Example
+# Demonstrates NLP primitives in Trident
+
+@intent("Analyze sentiment of text inputs")
+@model(nlp: "gemma-3")
+@hardware(target: TPU)
+
+pipeline SentimentAnalyzer:
+    
+    fn analyze(text: String) -> Sentiment:
+        """Analyze the sentiment of input text."""
+        
+        @natural_language
+        let result = llm.query(text, """
+            Analyze the sentiment of this text.
+            Return a JSON object with:
+            - sentiment: "positive", "negative", or "neutral"
+            - confidence: a number between 0 and 1
+            - key_phrases: list of phrases that indicate the sentiment
+        """)
+        
+        return Sentiment.from_dict(result)
+    
+    fn analyze_batch(texts: List[String]) -> List[Sentiment]:
+        """Analyze sentiment for multiple texts."""
+        let results = []
+        
+        for text in texts:
+            results.append(analyze(text))
+        
+        return results
+    
+    fn get_summary(texts: List[String]) -> SentimentSummary:
+        """Get aggregate sentiment statistics."""
+        let sentiments = analyze_batch(texts)
+        
+        let positive_count = 0
+        let negative_count = 0
+        let neutral_count = 0
+        
+        for s in sentiments:
+            if s.sentiment == "positive":
+                positive_count = positive_count + 1
+            elif s.sentiment == "negative":
+                negative_count = negative_count + 1
+            else:
+                neutral_count = neutral_count + 1
+        
+        return SentimentSummary(
+            positive: positive_count,
+            negative: negative_count,
+            neutral: neutral_count,
+            total: len(texts)
+        )
+
+
+fn main():
+    let analyzer = SentimentAnalyzer()
+    
+    # Example texts
+    let texts = [
+        "I absolutely love this product! Best purchase ever.",
+        "This is terrible. Complete waste of money.",
+        "It's okay, nothing special.",
+    ]
+    
+    for text in texts:
+        let result = analyzer.analyze(text)
+        print(text)
+        print(result)

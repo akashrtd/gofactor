@@ -1,0 +1,24 @@
+pipeline InvoiceProcessor:
+    # Configure models for this pipeline
+    @model(ocr: "qwen2.5-vl", nlp: "gemma-3-quantized")
+    fn process(file_path: string) -> json:
+        # Load the image/pdf
+        let image = vision.read_file(file_path)
+
+        # 1. Optical Character Recognition (Built-in)
+        # We explicitly request layout info for better table extraction
+        let text_layout = ocr.extract(image, layout=true)
+
+        # 2. Extract structured data using built-in NLP primitive
+        @intent("Extract vendor, total amount, and invoice number")
+        let data = nlp.extract(text_layout, schema={
+            "vendor": string,
+            "total": float,
+            "invoice_num": string,
+            "date": string
+        })
+
+        print(f"Vendor: {data.vendor}")
+        print(f"Total: ${data.total}")
+        
+        return data

@@ -1,0 +1,45 @@
+# Trident Gallery: Legal Contract Analysis
+# Sector: Legal Tech
+# Features: Long-context NLP, risk assessment, clause extraction
+
+struct Clause:
+    type: string  # e.g., "Indemnification", "Termination", "Liability"
+    text: string
+    risk_level: string # "High", "Medium", "Low"
+    summary: string
+
+struct ContractAnalysis:
+    title: string
+    parties: List[string]
+    effective_date: date
+    expiration_date: date
+    clauses: List[Clause]
+    overall_risk_score: int # 0-100
+    red_flags: List[string]
+
+pipeline ContractReviewer:
+    # Use a model with large context window for contracts
+    @model(nlp: "claude-3-opus-adapter") 
+    fn analyze(pdf_path: string) -> ContractAnalysis:
+        # 1. Document Ingestion
+        let doc = vision.read_pdf(pdf_path)
+        let text = ocr.extract(doc, mode="document")
+
+        # 2. Clause Extraction & Classification
+        @intent("Identify and classify all standard clauses")
+        let clauses = nlp.extract_list(text, schema=Clause)
+
+        # 3. Risk Assessment
+        @intent("Analyze clauses for unusual risks or deviations from standard commercial terms")
+        let risks = nlp.query(clauses, "List 3-5 major red flags for the buyer")
+
+        # 4. Construct Final Report
+        return ContractAnalysis(
+            title=nlp.query(text, "Extract agreement title").as_string(),
+            parties=nlp.extract(text, schema=List[string], prompt="Who are the signing parties?"),
+            effective_date=nlp.extract(text, schema=date, prompt="When does this start?"),
+            expiration_date=nlp.extract(text, schema=date, prompt="When does this end?"),
+            clauses=clauses,
+            overall_risk_score=nlp.query(risks, "Rate risk 0-100").as_int(),
+            red_flags=risks
+        )

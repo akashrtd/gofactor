@@ -1,0 +1,13 @@
+[package]
+name = "invoice-processor"
+version = "0.1.0"
+description = "Production-grade invoice processing pipeline"
+authors = ["Trident Team <team@trident.dev>"]
+license = "MIT"
+
+[dependencies]
+trident-core = ">=0.1.0"
+
+[models]
+ocr = "qwen2.5-vl"
+nlp = "gemma-3-quantized"

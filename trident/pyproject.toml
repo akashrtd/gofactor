@@ -1,0 +1,79 @@
+[project]
+name = "trident"
+version = "0.1.0"
+description = "A tri-modal programming language for AI-Human-TPU communication"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.11"
+authors = [
+    { name = "Trident Team" }
+]
+keywords = ["programming-language", "tpu", "nlp", "ocr", "jax", "ai"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Compilers",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+dependencies = [
+    "jax>=0.4.35",
+    "jaxlib>=0.4.35",
+    "transformers>=4.46.0",
+    "pillow>=10.0.0",
+    "rich>=13.0.0",
+    "click>=8.0.0",
+    "tomli>=2.0.0",
+    "pydantic>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.0.0",
+    "mypy>=1.8.0",
+    "ruff>=0.4.0",
+]
+tpu = [
+    "jax[tpu]>=0.4.35",
+]
+gpu = [
+    "jax[cuda12]>=0.4.35",
+]
+
+[project.scripts]
+trident = "trident.cli.main:main"
+librarian = "trident.librarian.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/trident-lang/trident"
+Documentation = "https://trident-lang.dev/docs"
+Repository = "https://github.com/trident-lang/trident"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/trident"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --cov=trident --cov-report=term-missing"

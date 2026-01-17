@@ -1,0 +1,49 @@
+# Trident Gallery: Receipt Scanning & Expense Categorization
+# Sector: FinTech / Expense Management
+# Features: Noisy image handling, categorization, currency conversion
+
+struct ExpenseItem:
+    description: string
+    amount: float
+    category: string  # "Food", "Travel", "Office", "Lodging"
+
+struct Receipt:
+    merchant: string
+    date: date
+    time: string
+    items: List[ExpenseItem]
+    total: float
+    tax: float
+    currency: string
+    payment_method: string
+
+pipeline ReceiptScanner:
+    # Small, fast model for high-volume receipt processing
+    @model(ocr: "trident-ocr-receipts-mobile", nlp: "gemma-3-quantized")
+    fn process_receipt(image_path: string) -> Receipt:
+        # 1. Preprocessing for Receipt Quality (often crumpled/blurry)
+        let raw_img = vision.read_file(image_path)
+        let processed = vision.auto_level(raw_img) 
+                          |> vision.sharpen()
+                          |> vision.binarize() # B&W for better OCR
+
+        # 2. Robust OCR
+        let text_layout = ocr.extract(processed, layout=true)
+
+        # 3. Extraction & Categorization
+        @intent("Extract receipt details and categorize each item into standard expense categories")
+        let receipt = nlp.extract(text_layout, schema=Receipt)
+
+        return receipt
+
+    fn convert_currency(receipt: Receipt, target_currency: string = "USD") -> Receipt:
+        if receipt.currency == target_currency:
+            return receipt
+            
+        # Call external API or use internal conversion primitive
+        # For this example, we'll assume a 'finance.convert' helper exists
+        # or use a simplified mock conversion
+        let rate = 1.0 # placeholder
+        
+        # Real implementation would call an exchange rate service
+        return receipt # (In a real app, logic to update amounts goes here)

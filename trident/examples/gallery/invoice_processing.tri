@@ -1,0 +1,57 @@
+# Trident Gallery: Advanced Invoice Processing
+# Sector: FinTech / Accounts Payable
+# Features: Strict typing, custom validation, confidence scoring, confidence thresholding
+
+struct Address:
+    street: string
+    city: string
+    state: string
+    zip: string
+    country: string
+
+struct LineItem:
+    description: string
+    quantity: int
+    unit_price: float
+    total: float
+
+struct Invoice:
+    id: string
+    date: date
+    vendor_name: string
+    vendor_address: Address
+    items: List[LineItem]
+    subtotal: float
+    tax: float
+    total: float
+    currency: string = "USD"
+
+pipeline AdvancedInvoiceProcessor:
+    @model(ocr: "qwen2.5-vl", nlp: "gemma-3-quantized")
+    @hardware(target="tpu_v5e", precision="bfloat16") 
+    fn process(file_path: string) -> Invoice:
+        # 1. Load and Preprocess
+        let img = vision.read_file(file_path)
+        let cleaned_img = vision.deskew(img) |> vision.denoise()
+
+        # 2. OCR with Layout Analysis
+        # Layout preservation is critical for table extraction
+        let doc_layout = ocr.extract(cleaned_img, layout=true)
+
+        # 3. Extraction with Confidence Scoring
+        @intent("Extract strict invoice structure. Fail if confidence < 90%")
+        let invoice_data = nlp.extract(doc_layout, schema=Invoice)
+
+        # 4. Business Logic Validation
+        if invoice_data.total != (invoice_data.subtotal + invoice_data.tax):
+            # Self-correction attempt using LLM reasoning
+            @intent("Fix mathematical inconsistency in totals")
+            let corrected = nlp.reason(invoice_data, "Recalculate total based on line items")
+            return corrected
+
+        return invoice_data
+
+    fn batch_process(dir_path: string) -> List[Invoice]:
+        # Trivial parallelization on TPU
+        let files = os.list_files(dir_path, "*.pdf")
+        return map(process, files)
